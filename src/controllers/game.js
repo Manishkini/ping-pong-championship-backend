@@ -21,3 +21,20 @@ export const start = async (req, res) => {
         return res.status(500).send({ error: error, massage: `Something went wrong!` })
     }
 }
+
+export const get = async (req, res) => {
+    try {
+        const { game_id } = req.params;
+
+        const isGameFound = await Game.findById(game_id)
+        .populate(["championship_id", "first_player", "second_player", "Winner", "Loser"]);
+
+        if(!isGameFound) {
+            return res.status(200).send({ massage: `Game not found.` })
+        }
+
+        return res.status(200).send({ game: isGameFound, massage: `Game fetched successfully` })
+    } catch(error) {
+        return res.status(500).send({ error: error, massage: `Something went wrong!` })
+    }
+}

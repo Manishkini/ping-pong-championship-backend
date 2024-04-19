@@ -2,13 +2,14 @@ import Game from "../models/games.js";
 import Point from "../models/points.js";
 import mongoose from "mongoose";
 import { draw } from "../utils/draw.js";
+import { emitEvent } from "../configs/socket.js";
 const ObjectId = mongoose.Types.ObjectId;
 
 export const lastRound = async (req, res) => {
     try {
         const { game_id } = req.params;
 
-        const point = await Game.findOne({ _id: game_id }).sort({ createdAt: -1 }).limit(1);
+        const point = await Point.findOne({ game_id }).sort({ createdAt: -1 }).limit(1);
 
         return res.status(200).send({ point, massage: `Last point fetched successfully` })
     } catch(error) {
@@ -32,6 +33,8 @@ export const recordNewPoint = async (req, res) => {
         }
 
         const point = await Point.create({ game_id, attack: { player_id: attack_player_id, selected_number }, round_number });
+
+        emitEvent(`${game_id}:referee`, { role: "Attacker", attack_player_id, selected_number, round_number });
 
         return res.status(200).send({ point, massage: `New point added successfully` })
     } catch(error) {
@@ -58,6 +61,8 @@ export const recordDefensePoint = async (req, res) => {
             { game_id, round_number },
             { defense: { player_id: defense_player_id, defense_array } }
         );
+
+        emitEvent(`${game_id}:referee`, { role: "Attacker", defense_player_id, defense_array, round_number });
 
         return res.status(200).send({ point, massage: `New point added successfully` })
     } catch(error) {
@@ -103,6 +108,10 @@ export const roundWinner = async (req, res) => {
             await Game.updateOne({ _id: game_id }, { $set: { Winner: game_winner, Loser: game_loser } })
         }
         
+        emitEvent(`${game_id}:players`, {
+            game_id
+        })
+
         return res.status(200).send({
             round_winner, 
             round_loser, 

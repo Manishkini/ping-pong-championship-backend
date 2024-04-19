@@ -2,6 +2,8 @@ import Championship from "../models/championships.js";
 import Game from "../models/games.js";
 import mongoose from "mongoose";
 import { draw } from "../utils/draw.js";
+import Player from "../models/players.js";
+import { emitEvent } from "../configs/socket.js";
 const ObjectId = mongoose.Types.ObjectId;
 
 export const create = async (req, res) => {
@@ -12,8 +14,8 @@ export const create = async (req, res) => {
             return res.status(200).send({ massage: `'name', 'players' is required` })
         }
         let playersArrayList = [];
-        players.forEach((id) => {
-            playersArrayList.push({ player_id: new ObjectId(id), status: "Waiting" })
+        players.forEach((obj) => {
+            playersArrayList.push({ player_id: new ObjectId(obj._id), player_name: obj.name, status: "Waiting" })
         })
 
         const championship = await Championship.create({ name, players: playersArrayList });
@@ -40,12 +42,31 @@ export const invite = async (req, res) => {
 
         let playersArrayList = [];
         championship.players.forEach((obj) => {
-            playersArrayList.push({ player_id: obj.player_id, status: "Invited" })
+            playersArrayList.push({ player_id: obj.player_id, player_name: obj.player_name, status: "Invited" })
         })
 
         await Championship.updateOne({ _id: id }, { $set: { players: playersArrayList } });
 
         return res.status(200).send({ massage: `Invitation sent successfully` })
+    } catch(error) {
+        return res.status(500).send({ error: error })
+    }
+}
+
+export const get = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const championship = await Championship.findById(id).populate("players.player_id")
+        return res.status(200).send({ championship, massage: `Championship fetched successfully` })
+    } catch(error) {
+        return res.status(500).send({ error: error })
+    }
+}
+
+export const getPlayers = async (req, res) => {
+    try {
+        const players = await Player.find({}, { name: 1, _id: 1 });
+        return res.status(200).send({ players, massage: `Players fetched successfully` })
     } catch(error) {
         return res.status(500).send({ error: error })
     }
@@ -67,10 +88,12 @@ export const playerJoining = async (req, res) => {
 
         let playersArrayList = [];
         championship.players.forEach((obj) => {
-            playersArrayList.push({ player_id: obj.player_id, status: obj.player_id.toString() === player_id ? "Joined" : obj.status });
+            playersArrayList.push({ player_id: obj.player_id, player_name: obj.player_name, status: obj.player_id.toString() === player_id ? "Joined" : obj.status });
         })
 
         await Championship.updateOne({ _id: id }, { $set: { players: playersArrayList } });
+
+        emitEvent(id, { player_id: player_id, status: "Joined" });
 
         return res.status(200).send({ massage: `Player Joined successfully` })
     } catch(error) {
@@ -92,7 +115,7 @@ export const start = async (req, res) => {
             return res.status(200).send({ massage: `Championship not found!` })
         }
 
-        await Championship.updateOne({ id }, { Started: "Started" });
+        await Championship.updateOne({ id }, { status: "Started" });
         const games = draw(championship.players);
         let roundNumber = 1;
         for await(const game of games) {
@@ -105,6 +128,8 @@ export const start = async (req, res) => {
             }
             await Game.create(gameObj);
         }
+
+        emitEvent(id, { player_id: null, status: "Started" });
 
         return res.status(200).send({ massage: `Championship started successfully` })
     } catch(error) {
@@ -125,7 +150,7 @@ export const getAllChampionshipsByStatus = async (req, res) => {
             query.status = "Finished";
         }
 
-        const championship = await Championship.find(query);
+        const championship = await Championship.find(query).sort({ createdAt: -1 });
 
         return res.status(200).send({ championship, massage: `Championship fetched successfully` })
     } catch(error) {
@@ -136,8 +161,20 @@ export const getAllChampionshipsByStatus = async (req, res) => {
 export const getAllGamesByChampionshipId = async (req, res) => {
     try {
         const { championship_id } = req.params;
+        const user = req.user;
 
-        const games = await Game.find({ championship_id })
+        const query = {
+            championship_id: new ObjectId(championship_id)
+        }
+
+        if(user.type === "player") {
+            query["$or"] = [
+                { first_player: new ObjectId(user._id) },
+                { second_player: new ObjectId(user._id) },
+            ]
+        }
+
+        const games = await Game.find(query)
         .populate(["first_player", "second_player", "Winner", "Loser"])
         .sort({ game_round_number: 1 });
 

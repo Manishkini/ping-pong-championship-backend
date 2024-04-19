@@ -15,11 +15,15 @@ export const verify = async (req, res, next) => {
 
         if(userDetails.type === 'referee') {
             user = await Referee.findOne({ name: userDetails.name }, { password: -1 });
+            user = user._doc;
+            user.type = 'referee';
             if(!user) {
                 return res.status(403).send({ massage: "Referee Not Found" });
             }
         } else if(userDetails.type === 'player') {
             user = await Player.findOne({ name: userDetails.name }, { password: -1 });
+            user = user._doc;
+            user.type = 'player';
             if(!user) {
                 return res.status(403).send({ massage: "Player Not Found" });
             }
@@ -48,6 +52,8 @@ export const verifyReferee = async (req, res, next) => {
 
         if(userDetails.type === 'referee') {
             user = await Referee.findOne({ name: userDetails.name }, { password: -1 });
+            user = user._doc;
+            user.type = 'referee';
         } else {
             return res.status(403).send({ massage: "Request only allowed for referee's" });
         }
@@ -77,6 +83,8 @@ export const verifyPlayer = async (req, res, next) => {
         
         if(userDetails.type === 'player') {
             user = await Player.findOne({ name: userDetails.name }, { password: -1 });
+            user = user._doc;
+            user.type = 'player';
         } else {
             return res.status(403).send({ massage: "Request only allowed for player's" });
         }
