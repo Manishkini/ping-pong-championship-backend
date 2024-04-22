@@ -35,7 +35,7 @@ export const verify = async (req, res, next) => {
 
         next();
     } catch(error) {
-        return res.status(400).send({ massage: "Token Expired" });
+        return res.status(401).send({ massage: "Token Expired" });
     }
 }
 
@@ -66,7 +66,7 @@ export const verifyReferee = async (req, res, next) => {
         next();
 
     } catch(error) {
-        return res.status(400).send({ massage: "Token Expired" });
+        return res.status(401).send({ massage: "Token Expired" });
     }
 }
 
@@ -97,7 +97,6 @@ export const verifyPlayer = async (req, res, next) => {
         next();
 
     } catch(error) {
-        console.log('error', error)
-        return res.status(400).send({ massage: "Token Expired" });
+        return res.status(401).send({ massage: "Token Expired" });
     }
 }

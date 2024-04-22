@@ -11,12 +11,12 @@ export const initializeSocketIO = (server) => {
     });
 
     io.on('connection', (socket) => {
-        console.log('A user connected');
+        // console.log('A user connected');
 
         // You can handle common events here if needed
 
         socket.on('disconnect', () => {
-            console.log('User disconnected');
+            // console.log('User disconnected');
         });
     });
 }

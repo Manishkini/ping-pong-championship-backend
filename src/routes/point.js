@@ -6,10 +6,10 @@ const router = Router();
 
 router.get("/:game_id/lastRound", verify, lastRound)
 
-router.post("/:game_id/new", verifyPlayer, recordNewPoint)
+router.post("/:game_id/:point_id/attack", verifyPlayer, recordNewPoint)
 
-router.post("/:game_id/defensePoint", verifyPlayer, recordDefensePoint)
+router.post("/:game_id/:point_id/defense", verifyPlayer, recordDefensePoint)
 
-router.get("/:game_id/roundWinner/:round_number", verifyReferee, roundWinner)
+router.get("/:game_id/:point_id/winner", verifyReferee, roundWinner)
 
 export default router;

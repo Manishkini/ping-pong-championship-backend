@@ -9,9 +9,33 @@ export const lastRound = async (req, res) => {
     try {
         const { game_id } = req.params;
 
-        const point = await Point.findOne({ game_id }).sort({ createdAt: -1 }).limit(1);
+        const isGameFound = await Game.findById(game_id);
 
-        return res.status(200).send({ point, massage: `Last point fetched successfully` })
+        if(!isGameFound) {
+            return res.status(200).send({ massage: `Game not found.` })
+        }
+
+        const point = await Point.findOne({ game_id })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .populate({
+            path: 'attack',
+            populate: {
+                path: 'player_id',
+                model: 'Player'
+            }
+        }).populate({
+            path: 'defense',
+            populate: {
+                path: 'player_id',
+                model: 'Player'
+            },
+        });
+
+        const total_win_first = await Point.countDocuments({ round_winner: isGameFound.first_player._id });
+        const total_win_second = await Point.countDocuments({ round_winner: isGameFound.second_player._id });
+
+        return res.status(200).send({ point, total_win_first, total_win_second, massage: `Last point fetched successfully` })
     } catch(error) {
         return res.status(500).send({ error: error, massage: `Something went wrong!` })
     }
@@ -19,7 +43,7 @@ export const lastRound = async (req, res) => {
 
 export const recordNewPoint = async (req, res) => {
     try {
-        const { game_id } = req.params;
+        const { game_id, point_id } = req.params;
         const { attack_player_id, selected_number, round_number } = req.body;
 
         const isGameFound = await Game.findById(game_id);
@@ -32,9 +56,23 @@ export const recordNewPoint = async (req, res) => {
             return res.status(200).send({ massage: `Game winner is already declared.` })
         }
 
-        const point = await Point.create({ game_id, attack: { player_id: attack_player_id, selected_number }, round_number });
+        const isPointFound = await Point.findById(point_id);
 
-        emitEvent(`${game_id}:referee`, { role: "Attacker", attack_player_id, selected_number, round_number });
+        if(!isPointFound) {
+            return res.status(200).send({ massage: `Point not found.` })
+        }
+
+        const point = await Point.updateOne(
+            { _id: isPointFound._id },
+            {
+                $set: {
+                    attack: { player_id: attack_player_id, selected_number },
+                    round_number
+                }
+            }
+        );
+
+        emitEvent(game_id, { for: "Referee", role: "Attacker", attack_player_id, selected_number, round_number });
 
         return res.status(200).send({ point, massage: `New point added successfully` })
     } catch(error) {
@@ -44,7 +82,7 @@ export const recordNewPoint = async (req, res) => {
 
 export const recordDefensePoint = async (req, res) => {
     try {
-        const { game_id } = req.params;
+        const { game_id, point_id } = req.params;
         const { defense_player_id, defense_array, round_number } = req.body;
 
         const isGameFound = await Game.findById(game_id);
@@ -57,12 +95,22 @@ export const recordDefensePoint = async (req, res) => {
             return res.status(200).send({ massage: `Game winner is already declared.` })
         }
 
+        const isPointFound = await Point.findById(point_id);
+
+        if(!isPointFound) {
+            return res.status(200).send({ massage: `Point not found.` })
+        }
+
         const point = await Point.updateOne(
-            { game_id, round_number },
-            { defense: { player_id: defense_player_id, defense_array } }
+            { _id: isPointFound._id },
+            { 
+                $set: {
+                    defense: { player_id: defense_player_id, defense_array }
+                }
+            }
         );
 
-        emitEvent(`${game_id}:referee`, { role: "Attacker", defense_player_id, defense_array, round_number });
+        emitEvent(game_id, { for: "Referee", role: "Defense", defense_player_id, defense_array, round_number });
 
         return res.status(200).send({ point, massage: `New point added successfully` })
     } catch(error) {
@@ -72,11 +120,10 @@ export const recordDefensePoint = async (req, res) => {
 
 export const roundWinner = async (req, res) => {
     try {
-        const { game_id, round_number } = req.params;
+        const { game_id, point_id } = req.params;
         let first_player_winnings, second_player_winnings, game_winner, game_loser;
 
-        const isPointFound = await Point.findOne({ game_id, round_number });
-
+        const isPointFound = await Point.findById(point_id);
         if(!isPointFound) {
             return res.status(200).send({ massage: `Point not found.` })
         }
@@ -95,21 +142,51 @@ export const roundWinner = async (req, res) => {
             round_loser = isPointFound.defense.player_id;
         }
 
-        await Point.updateOne({ game_id, round_number }, { $set: { round_winner, round_loser } });
+        await Point.updateOne({ _id: isPointFound._id }, { $set: { round_winner, round_loser } });
 
         if(round_winner || round_loser) {
             first_player_winnings = await Point.countDocuments({ round_winner: game.first_player });
             second_player_winnings = await Point.countDocuments({ round_winner: game.second_player });
         }
 
+        // If some one wins
         if(first_player_winnings === 5 || second_player_winnings === 5) {
             game_winner = first_player_winnings === 5 ? game.first_player : game.second_player
             game_loser = first_player_winnings === 5 ? game.second_player : game.first_player
             await Game.updateOne({ _id: game_id }, { $set: { Winner: game_winner, Loser: game_loser } })
+
+            emitEvent(game_id, {
+                for: "Player",
+                game_id,
+                game_winner,
+                game_loser
+            })
+
+            return res.status(200).send({
+                round_winner,
+                round_loser,
+                first_player_winnings, 
+                second_player_winnings, 
+                game_winner,
+                game_loser,
+                massage: `Current Round Winner Declared`
+            })
         }
-        
-        emitEvent(`${game_id}:players`, {
-            game_id
+
+        const newPoint = await Point.create({ 
+            game_id, 
+            attack: { player_id: round_winner },
+            defense: { player_id: round_loser },
+            round_number: isPointFound.round_number + 1,
+        })
+
+        emitEvent(game_id, {
+            for: "Player", 
+            game_id,
+            round_winner,
+            round_loser,
+            first_player_winnings,
+            second_player_winnings
         })
 
         return res.status(200).send({
@@ -117,10 +194,10 @@ export const roundWinner = async (req, res) => {
             round_loser, 
             first_player_winnings, 
             second_player_winnings, 
-            game_winner, 
             massage: `Current Round Winner Declared`
         })
     } catch(error) {
+        console.log('error', error)
         return res.status(500).send({ error: error, massage: `Something went wrong!` })
     }
 }

@@ -2,6 +2,8 @@ import Championship from "../models/championships.js";
 import Game from "../models/games.js";
 import mongoose from "mongoose";
 import { draw } from "../utils/draw.js";
+import Point from "../models/points.js";
+import { emitEvent } from "../configs/socket.js";
 const ObjectId = mongoose.Types.ObjectId;
 
 export const start = async (req, res) => {
@@ -14,7 +16,20 @@ export const start = async (req, res) => {
             return res.status(200).send({ massage: `Game not found.` })
         }
 
+        if(isGameFound.status !== "Initiated") {
+            return res.status(200).send({ massage: `Game is already started or finished.` })
+        }
+
         await Game.updateOne({ _id: game_id }, { $set: { status: "Started" } })
+
+        const point = await Point.create({ 
+            game_id, 
+            attack: { player_id: isGameFound.first_player }, 
+            defense: { player_id: isGameFound.second_player },
+            round_number: 1
+        })
+
+        emitEvent(isGameFound.championship_id, { game_id, status: "Started" })
 
         return res.status(200).send({ massage: `Game started successfully` })
     } catch(error) {
