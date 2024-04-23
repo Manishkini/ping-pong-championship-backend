@@ -32,8 +32,8 @@ export const lastRound = async (req, res) => {
             },
         });
 
-        const total_win_first = await Point.countDocuments({ round_winner: isGameFound.first_player._id });
-        const total_win_second = await Point.countDocuments({ round_winner: isGameFound.second_player._id });
+        const total_win_first = await Point.countDocuments({ game_id, round_winner: isGameFound.first_player._id });
+        const total_win_second = await Point.countDocuments({ game_id, round_winner: isGameFound.second_player._id });
 
         return res.status(200).send({ point, total_win_first, total_win_second, massage: `Last point fetched successfully` })
     } catch(error) {
@@ -145,8 +145,8 @@ export const roundWinner = async (req, res) => {
         await Point.updateOne({ _id: isPointFound._id }, { $set: { round_winner, round_loser } });
 
         if(round_winner || round_loser) {
-            first_player_winnings = await Point.countDocuments({ round_winner: game.first_player });
-            second_player_winnings = await Point.countDocuments({ round_winner: game.second_player });
+            first_player_winnings = await Point.countDocuments({ game_id, round_winner: game.first_player });
+            second_player_winnings = await Point.countDocuments({ game_id, round_winner: game.second_player });
         }
 
         // If some one wins

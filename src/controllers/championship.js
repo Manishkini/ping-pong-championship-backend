@@ -183,3 +183,52 @@ export const getAllGamesByChampionshipId = async (req, res) => {
         return res.status(500).send({ error: error })
     }
 }
+
+export const createDraw = async (req, res) => {
+    try {
+        const { championship_id, type } = req.params;
+        let games;
+
+        if(type === 'semi-final') {
+            games = await Game.find({ championship_id, game_type: "Quarter" }, { Winner: 1, _id: 0 })
+            .populate(["Winner"])
+            .sort({ game_round_number: 1 });
+    
+            const winners = games.map((game) => game.Winner);
+    
+            const semis = draw(winners);
+    
+            let roundNumber = 5;
+            for await(const game of semis) {
+                const gameObj = {
+                    championship_id: championship_id,
+                    first_player: game[0]._id,
+                    second_player: game[1]._id,
+                    game_type: "Semi",
+                    game_round_number: roundNumber++,
+                }
+                await Game.create(gameObj);
+            }
+        } else if(type === 'final') {
+            games = await Game.find({ championship_id, game_type: "Semi" }, { Winner: 1, _id: 0 })
+            .populate(["Winner"])
+            .sort({ game_round_number: 1 });
+    
+            const winners = games.map((game) => game.Winner);
+
+            const gameObj = {
+                championship_id: championship_id,
+                first_player: winners[0]._id,
+                second_player: winners[1]._id,
+                game_type: "Final",
+                game_round_number: 7,
+            }
+            await Game.create(gameObj);
+        }
+
+        return res.status(200).send({ games, massage: `Games fetched successfully` });
+    } catch(error) {
+        console.log(error)
+        return res.status(500).send({ error: error })
+    }
+}

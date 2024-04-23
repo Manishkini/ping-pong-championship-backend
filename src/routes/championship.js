@@ -1,5 +1,15 @@
 import { Router } from "express";
-import { create, invite, playerJoining, start, getAllChampionshipsByStatus, getAllGamesByChampionshipId, getPlayers, get } from '../controllers/championship.js'
+import { 
+    create, 
+    invite, 
+    playerJoining, 
+    start, 
+    getAllChampionshipsByStatus, 
+    getAllGamesByChampionshipId, 
+    getPlayers, 
+    get,
+    createDraw
+} from '../controllers/championship.js'
 import { verifyReferee, verify, verifyPlayer } from "../middlewares/authentication.js";
 
 const router = Router();
@@ -19,5 +29,7 @@ router.get("/:id/start", verifyReferee, start);
 router.get("/:status?", verify, getAllChampionshipsByStatus);
 
 router.get("/:championship_id/games", verify, getAllGamesByChampionshipId);
+
+router.get("/:championship_id/draw/:type", verifyReferee, createDraw);
 
 export default router;
